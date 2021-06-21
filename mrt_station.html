@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>d3.js with leaflet.js</title>
+	<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7/leaflet.css" />
+	<script src="http://d3js.org/d3.v3.min.js"></script>
+	<script src="http://cdn.leafletjs.com/leaflet-0.7/leaflet.js">
+	</script>
+	<style>
+		rect:hover {
+			fill: orange;
+		}
+
+		#tooltip {
+			/* position: absolute; */
+			position: fixed;
+			width: 250px;
+			height: auto;
+			padding: 10px;
+			background-color: white;
+			-webkit-border-radius: 10px;
+			-moz-border-radius: 10px;
+			border-radius: 10px;
+			-webkit-box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4);
+			-moz-box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4);
+			box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4);
+			pointer-events: none;
+		}
+
+		#tooltip.hidden {
+			display: none;
+		}
+
+		#tooltip p {
+			margin: 0;
+			font-family: sans-serif;
+			font-size: 16px;
+			line-height: 20px;
+		}
+	</style>
+</head>
+<body>
+
+	<div id="map" style="width: 1200px; height: 800px"></div>
+	<div id="controller">
+		<div id="info" class="hidden">
+			<ul>
+			</ul>
+		</div>
+	</div>
+	<div id="tooltip" class="hidden">
+		<p><strong>
+				<span id="Line"></span>
+				<p><span id="ID"></span></p>
+			</strong></p>
+
+		<p><span id="Name"></span></p>
+		<p><span id="Count"></span></p>
+		<p><span id="Average"></span></p>
+		<p><span id="Area"></span></p>
+		<p><span id="Management"></span></p>
+	</div>
+	<script type="text/javascript">
+
+		var map = L.map('map').setView([25.046374, 121.517896], 12);
+		mapLink =
+			'<a href="http://openstreetmap.org">OpenStreetMap</a>';
+		L.tileLayer(
+			'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png', {
+			attribution: '&copy; ' + mapLink + ' Contributors',
+			maxZoom: 18,
+		}).addTo(map);
+
+		// Initialize the SVG layer
+		map._initPathRoot()
+
+		// We pick up the SVG from the map object
+		var svg = d3.select("#map").select("svg"),
+			g = svg.append("g");
+
+		var t = d3.dsv(",", "text/csv;charset=GB2312");
+
+		t("./data/mrt_station.csv", function (collection) {
+			collection.forEach(function (d) {
+				d.LatLng = new L.LatLng(d.lat, d.lng)
+			})
+			var feature = g.selectAll("circle")
+				.data(collection)
+				.enter()
+				.append("circle")
+				.attr('class', 'price')
+				.attr('fill-opacity', 0.1)
+				.attr("stroke-width", 2)
+				.attr("stroke", function (d) {
+					var lineId = d.id;
+					if (lineId.match(/BL/)) {
+						return '#398AFC';
+					}
+					else if (lineId.match(/BR/)) {
+						return '#CC9900';
+					}
+					else if (lineId.match(/B/)) {
+						return '#CC9900';
+					}
+					else if (lineId.match(/R/)) {
+						return '#FD5B56';
+					}
+					else if (lineId.match(/G/)) {
+						return '#009900';
+					}
+					else if (lineId.match(/O/)) {
+						return '#FFCC66';
+					}
+					else {
+						return 'white';
+					}
+				})
+				.attr("r", function (d) {
+					var count = d.average;
+					// var t = (Math.sqrt(count / 6000));
+					
+					var t = (count / 100000)*2;
+					if (t < 3) {
+						return 6;
+					} else {
+						return t;
+					}
+				})
+				.on("mouseenter", function (d) {
+					d3.select("#tooltip")
+						.style("left", 150 + "px")
+						.style("top", 200 + "px")
+						.select("#Line")
+						.text(d.line + d.id);
+
+					d3.select("#tooltip")
+						.style("left", 150 + "px")
+						.style("top", 200 + "px")
+						.select("#Name")
+						.text(d.name);
+
+					d3.select("#tooltip")
+						.style("left", 150 + "px")
+						.style("top", 200 + "px")
+						.select("#Count")
+						.text("Sale_Count : " + d.count + " units");
+
+					d3.select("#tooltip")
+						.style("left", 150 + "px")
+						.style("top", 200 + "px")
+						.select("#Average")
+						.text("Average_Price: " + d.average + " NTD/py");
+
+					d3.select("#tooltip")
+						.style("left", 150 + "px")
+						.style("top", 200 + "px")
+						.select("#Area")
+						.text("Average_Size: " + d.area + " py");
+
+					d3.select("#tooltip")
+						.style("left", 150 + "px")
+						.style("top", 200 + "px")
+						.select("#Management")
+						.text("Management_Level: " + d.manager);
+					//Show the tooltip
+					d3.select("#tooltip").classed("hidden", false);
+				})
+				.on("mouseleave", function (d) {
+					d3.select("#tooltip").classed("hidden", true);
+				});
+
+			var feature2 = g.selectAll("text")
+				.data(collection)
+				.enter()
+				.append("text")
+				.text(function (d) {
+					return d.name;
+				})
+				.attr("text-anchor", "middle")
+				.attr("font-family", "sans-serif")
+				.attr("font-size", "8px")
+				.attr("fill", "black");
+
+			map.on("viewreset", update);
+			update();
+
+			function update() {
+				feature.attr("transform",
+					function (d) {
+						return "translate(" +
+							map.latLngToLayerPoint(d.LatLng).x + "," +
+							map.latLngToLayerPoint(d.LatLng).y + ")";
+					}
+				)
+
+				feature2.attr("transform",
+					function (d) {
+						return "translate(" +
+							map.latLngToLayerPoint(d.LatLng).x + "," +
+							map.latLngToLayerPoint(d.LatLng).y + ")";
+					}
+				)
+			}
+		})
+	</script>
+</body>
+</html>
